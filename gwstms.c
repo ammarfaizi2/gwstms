@@ -27,7 +27,7 @@
 #include <time.h>
 
 #define CLIENT_NR_MAX_SOCKS	16
-#define NR_SERVER_CLIENT_SLOT	64
+#define NR_SERVER_CLIENT_SLOT	4
 #define NR_SERVER_TUN_FDS	4
 #define SERVER_TUN_NAME		"gws0"
 #define CLIENT_TUN_NAME		"gwc0"
@@ -709,8 +709,20 @@ static int server_handle_client_pkt_ping(struct server_ctx *ctx)
 
 static int server_handle_client_pkt_tun_data(struct server_ctx *ctx)
 {
+	ssize_t ret;
+
 	if (!ctx->cur_client)
 		return 0;
+
+	ret = write(ctx->tun_fds[0], ctx->cpkt.__raw, ctx->cpkt_len);
+	if (ret < 0) {
+		ret = errno;
+		if (ret == EAGAIN)
+			return 0;
+
+		perror("write()");
+		return -ret;
+	}
 
 	return 0;
 }
@@ -1063,6 +1075,17 @@ out_err:
 	return -EINVAL;
 }
 
+static int client_bring_up_iface(struct client_ctx *ctx)
+{
+	int ret = 0;
+
+	ret |= pr_exec("ip link set dev %s up", CLIENT_TUN_NAME);
+	ret |= pr_exec("ip addr add %s/%d dev %s", GWC_IP_GATEWAY, GWC_SUBNET_CIDR, CLIENT_TUN_NAME);
+
+	(void)ctx;
+	return ret;
+}
+
 static int client_perform_handshake(struct client_worker *wrk)
 {
 	struct client_ctx *ctx = wrk->ctx;
@@ -1110,11 +1133,50 @@ static int client_poll_events(struct client_worker *wrk)
 
 static int client_handle_server_handshake(struct client_worker *wrk)
 {
+	struct pkt_handshake *hs = &wrk->spkt.handshake;
+
+	if (wrk->cpkt_len != PKT_HDR_LEN + sizeof(*hs)) {
+		printf("Invalid handshake packet length: %u\n", wrk->cpkt_len);
+		return 0;
+	}
+
+	if (memcmp(hs->magic, HS_MAGIC, sizeof(hs->magic)) != 0) {
+		printf("Invalid handshake magic (%u, %u, %u, %u)\n",
+		       hs->magic[0], hs->magic[1], hs->magic[2], hs->magic[3]);
+		return 0;
+	}
+
+	printf("%s (%s) is connected to the server\n", wrk->bind_iface, wrk->bind_ip);
+	wrk->handshake_ok = true;
 	return 0;
 }
 
 static int client_handle_server_tun_data(struct client_worker *wrk)
 {
+	uint32_t len;
+	ssize_t ret;
+
+	if (!wrk->handshake_ok) {
+		printf("Received a TUN packet with handshake_ok equals to false\n");
+		return 0;
+	}
+
+	len = ntohs(wrk->spkt.len);
+	if (wrk->cpkt_len != PKT_HDR_LEN + len) {
+		printf("Invalid server TUN packet length: %u (expected len = %u)\n", len, wrk->cpkt_len);
+		return 0;
+	}
+
+	ret = write(wrk->tun_fd, wrk->spkt.__raw, len);
+	if (ret < 0) {
+		ret = errno;
+		if (ret == EAGAIN)
+			return 0;
+
+		perror("write()");
+		return -ret;
+	}
+
 	return 0;
 }
 
@@ -1178,7 +1240,28 @@ static int client_handle_udp_packet(struct client_worker *wrk)
 
 static int client_handle_tun_packet(struct client_worker *wrk)
 {
-	return 0;
+	struct client_ctx *ctx = wrk->ctx;
+	uint32_t len;
+	ssize_t ret;
+
+	ret = read(wrk->tun_fd, wrk->cpkt.__raw, sizeof(wrk->cpkt.__raw));
+	if (ret < 0) {
+		ret = errno;
+		if (ret == EAGAIN)
+			return 0;
+
+		perror("read()");
+		return -ret;
+	}
+
+	printf("Read %zd bytes from TUN device\n", ret);
+
+	len = (uint32_t)ret;
+	wrk->cpkt.type = CL_PKT_TUN_DATA;
+	wrk->cpkt.pad = 0;
+	wrk->cpkt.len = htons((uint16_t)len);
+	len = PKT_HDR_LEN + len;
+	return queue_sendto(&wrk->sql, &wrk->cpkt, len, &ctx->dst_addr);
 }
 
 static int client_handle_events(struct client_worker *wrk, int nr_events)
@@ -1298,6 +1381,10 @@ static int run_client(void)
 	ret = client_interpret_env(&ctx);
 	if (ret < 0)
 		return ret;
+
+	ret = client_bring_up_iface(&ctx);
+	if (ret < 0)
+		goto out;
 
 	ret = install_signal_stop_handler(&ctx.stop);
 	if (ret < 0)
