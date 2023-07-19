@@ -723,6 +723,7 @@ static int server_handle_client_pkt_tun_data(struct server_ctx *ctx)
 		return 0;
 	}
 
+	printf("write to tun %d with %hu bytes\n", ctx->tun_fds[0], pkt->len);
 	ret = write(ctx->tun_fds[0], pkt->__raw, pkt->len);
 	if (ret < 0) {
 		ret = errno;
