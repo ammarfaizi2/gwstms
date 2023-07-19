@@ -823,7 +823,7 @@ static int server_handle_udp_packet(struct server_ctx *ctx)
 static struct client_slot *server_find_active_client(struct server_ctx *ctx)
 {
 	struct client_slot *clients = ctx->clients;
-	uint32_t i, min, min_idx, no;
+	uint32_t i, min, min_idx = 0, no;
 	bool got_first_used = false;
 
 	no = ctx->nr_online_clients;
