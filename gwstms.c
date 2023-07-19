@@ -721,13 +721,15 @@ static int server_handle_client_packet(struct server_ctx *ctx)
 	int ret;
 
 	if (ctx->cpkt_len < offsetoff(struct pkt, __raw)) {
-		printf("bbbb\n");
+		printf("Client %s sent an invalid packet length: %u\n",
+		       addr_to_str_pt(&ctx->addr), ctx->cpkt_len);
 		return 0;
 	}
 
 	len = ntohs(ctx->cpkt.len);
 	if (ctx->cpkt_len != offsetoff(struct pkt, __raw) + len) {
-		printf("aaaa\n");
+		printf("Client %s sent an invalid packet length: %u\n",
+		       addr_to_str_pt(&ctx->addr), ctx->cpkt_len);
 		return 0;
 	}
 
