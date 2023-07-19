@@ -710,12 +710,16 @@ static int server_handle_client_packet(struct server_ctx *ctx)
 	uint16_t len;
 	int ret;
 
-	if (ctx->cpkt_len < offsetoff(struct pkt, __raw))
+	if (ctx->cpkt_len < offsetoff(struct pkt, __raw)) {
+		printf("bbbb\n");
 		return 0;
+	}
 
 	len = ntohs(ctx->cpkt.len);
-	if (ctx->cpkt_len != offsetoff(struct pkt, __raw) + len)
+	if (ctx->cpkt_len != offsetoff(struct pkt, __raw) + len) {
+		printf("aaaa\n");
 		return 0;
+	}
 
 	ctx->cur_client = server_lookup_client(ctx, &ctx->addr);
 	switch (ctx->cpkt.type) {
@@ -766,7 +770,6 @@ static int server_handle_udp_packet(struct server_ctx *ctx)
 		return -ret;
 	}
 
-	printf("ret recvfrom = %zd\n", ret);
 	if (sa_len > sizeof(ctx->addr)) {
 		printf("recvfrom(): Invalid sockaddr length: %u\n", (unsigned)sa_len);
 		return -EINVAL;
