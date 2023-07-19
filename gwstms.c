@@ -848,7 +848,7 @@ static struct client_slot *server_find_active_client(struct server_ctx *ctx)
 	}
 
 	printf("taken client idx = %u\n", min_idx);
-	clients[i].iter++;
+	clients[min_idx].iter++;
 	return &clients[min_idx];
 }
 
