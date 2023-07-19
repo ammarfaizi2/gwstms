@@ -687,6 +687,7 @@ static int server_handle_client_pkt_handshake(struct server_ctx *ctx)
 		return 0;
 	}
 
+	client->addr = ctx->addr;
 	ctx->cur_client = client;
 	ret = server_respond_handshake(ctx);
 	if (ret < 0) {
@@ -695,7 +696,6 @@ static int server_handle_client_pkt_handshake(struct server_ctx *ctx)
 	}
 
 	printf("Accepted a new client: %s\n", addr_to_str_pt(&ctx->addr));
-	client->addr = ctx->addr;
 	return ret;
 }
 
