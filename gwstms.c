@@ -1133,7 +1133,7 @@ static int client_bring_up_iface(struct client_ctx *ctx)
 	int ret = 0;
 
 	ret |= pr_exec("ip link set dev %s up", CLIENT_TUN_NAME);
-	ret |= pr_exec("ip addr add %s/%d dev %s", GWC_IP_GATEWAY, GWC_SUBNET_CIDR, CLIENT_TUN_NAME);
+	ret |= pr_exec("ip addr add %s/%d dev %s", GWC_IP_CLIENT, GWC_SUBNET_CIDR, CLIENT_TUN_NAME);
 
 	(void)ctx;
 	return ret;
@@ -1220,7 +1220,6 @@ static int client_handle_server_tun_data(struct client_worker *wrk)
 		return 0;
 	}
 
-	printf("Received a TUN packet from server: %u bytes\n", len);
 	ret = write(wrk->tun_fd, wrk->spkt.__raw, len);
 	if (ret < 0) {
 		ret = errno;
