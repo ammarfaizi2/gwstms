@@ -586,6 +586,36 @@ static struct client_slot *server_get_client_slot(struct server_ctx *ctx)
 	return NULL;
 }
 
+static int flush_sendto_queue(struct send_queue_list *sql)
+{
+	int fd = sql->udp_pfd->fd;
+
+	while (sql->sq_head) {
+		struct send_queue *sq;
+		ssize_t ret;
+
+		sq = sql->sq_head;
+		ret = sendto(fd, &sq->pkt, sq->len, MSG_DONTWAIT,
+			     (struct sockaddr *)&sq->dst,
+			     get_sockaddr_len(&sq->dst));
+		if (ret < 0) {
+			ret = errno;
+			if (ret == EAGAIN)
+				return 0;
+
+			perror("sendto()");
+			return -ret;
+		}
+
+		sql->sq_head = sq->next;
+		free(sq);
+	}
+
+	sql->sq_tail = NULL;
+	sql->udp_pfd->events &= ~POLLOUT;
+	return 0;
+}
+
 static ssize_t __queue_sendto(struct send_queue_list *sql, struct pkt *pkt,
 			      uint32_t len, struct sockaddr_storage *ss)
 {
@@ -593,6 +623,7 @@ static ssize_t __queue_sendto(struct send_queue_list *sql, struct pkt *pkt,
 	struct send_queue *tail = sql->sq_tail;
 	struct send_queue *sq;
 
+	printf("Queueing %u bytes packet to %s\n", len, addr_to_str_pt(ss));
 	sq = malloc(sizeof(*sq));
 	if (!sq) {
 		printf("Cannot allocate memory for send queue\n");
@@ -886,13 +917,25 @@ static int server_handle_tun_packet(struct server_ctx *ctx, int fd)
 static int server_handle_events(struct server_ctx *ctx, int nr_events)
 {
 	uint32_t nr = (uint32_t)nr_events;
+	short revents;
 	uint32_t i;
 	int ret = 0;
 
-	if (ctx->pfds[0].revents & POLLIN) {
-		ret = server_handle_udp_packet(ctx);
-		if (ret < 0)
-			return ret;
+	revents = ctx->pfds[0].revents;
+	if (revents & (POLLIN | POLLOUT)) {
+
+		if (revents & POLLIN) {
+			ret = server_handle_udp_packet(ctx);
+			if (ret < 0)
+				return ret;
+		}
+
+		if (revents & POLLOUT) {
+			printf("Flushing sendto queue...\n");
+			ret = flush_sendto_queue(&ctx->sql);
+			if (ret < 0)
+				return ret;
+		}
 
 		nr--;
 	}
@@ -1339,12 +1382,24 @@ static int client_handle_tun_packet(struct client_worker *wrk)
 static int client_handle_events(struct client_worker *wrk, int nr_events)
 {
 	uint32_t nr = (uint32_t)nr_events;
+	short revents;
 	int ret = 0;
 
-	if (wrk->pfds[0].revents & POLLIN) {
-		ret = client_handle_udp_packet(wrk);
-		if (ret < 0)
-			return ret;
+	revents = wrk->pfds[0].revents;
+	if (revents & (POLLIN | POLLOUT)) {
+
+		if (revents & POLLIN) {
+			ret = client_handle_udp_packet(wrk);
+			if (ret < 0)
+				return ret;
+		}
+
+		if (revents & POLLOUT) {
+			printf("Flushing sendto queue...\n");
+			ret = flush_sendto_queue(&wrk->sql);
+			if (ret < 0)
+				return ret;
+		}
 
 		nr--;
 	}
