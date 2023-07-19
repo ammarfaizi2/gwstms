@@ -709,12 +709,21 @@ static int server_handle_client_pkt_ping(struct server_ctx *ctx)
 
 static int server_handle_client_pkt_tun_data(struct server_ctx *ctx)
 {
+	struct client_slot *client = ctx->cur_client;
+	struct pkt *pkt = &ctx->cpkt;
 	ssize_t ret;
 
-	if (!ctx->cur_client)
+	if (!client)
 		return 0;
 
-	ret = write(ctx->tun_fds[0], ctx->cpkt.__raw, ctx->cpkt_len);
+	pkt->len = ntohs(pkt->len);
+	if (ctx->cpkt_len != PKT_HDR_LEN + pkt->len) {
+		printf("Invalid TUN data packet length: %u from %s\n",
+		       ctx->cpkt_len, addr_to_str_pt(&ctx->addr));
+		return 0;
+	}
+
+	ret = write(ctx->tun_fds[0], pkt->__raw, pkt->len);
 	if (ret < 0) {
 		ret = errno;
 		if (ret == EAGAIN)
