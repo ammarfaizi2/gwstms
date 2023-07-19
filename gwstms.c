@@ -121,6 +121,7 @@ struct client_ctx {
 
 struct client_slot {
 	bool			is_used;
+	uint32_t		iter;
 	struct sockaddr_storage	addr;
 	struct timespec		last_seen;
 };
@@ -134,6 +135,7 @@ struct server_ctx {
 	struct client_slot	*cur_client;
 	uint32_t		nr_clients;
 	uint32_t		nr_pfds;
+	uint32_t		nr_online_clients;
 
 	struct sockaddr_storage	addr;
 
@@ -696,6 +698,7 @@ static int server_handle_client_pkt_handshake(struct server_ctx *ctx)
 	}
 
 	printf("Accepted a new client: %s\n", addr_to_str_pt(&ctx->addr));
+	ctx->nr_online_clients++;
 	return ret;
 }
 
@@ -820,16 +823,32 @@ static int server_handle_udp_packet(struct server_ctx *ctx)
 static struct client_slot *server_find_active_client(struct server_ctx *ctx)
 {
 	struct client_slot *clients = ctx->clients;
-	uint32_t i;
+	uint32_t i, min, min_idx, no;
+	bool got_first_used = false;
+
+	no = ctx->nr_online_clients;
+	if (!no)
+		return NULL;
 
 	for (i = 0; i < ctx->nr_clients; i++) {
 		if (!clients[i].is_used)
 			continue;
 
-		return &clients[i];
+		if (!got_first_used) {
+			min = clients[i].iter;
+			min_idx = i;
+			got_first_used = true;
+			continue;
+		}
+
+		if (clients[i].iter < min) {
+			min = clients[i].iter;
+			min_idx = i;
+		}
 	}
 
-	return NULL;
+	printf("taken client idx = %u\n", min_idx);
+	return &clients[min_idx];
 }
 
 static int server_handle_tun_packet(struct server_ctx *ctx, int fd)
