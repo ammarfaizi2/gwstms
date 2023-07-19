@@ -723,7 +723,6 @@ static int server_handle_client_pkt_tun_data(struct server_ctx *ctx)
 		return 0;
 	}
 
-	printf("write to tun %d with %hu bytes\n", ctx->tun_fds[0], pkt->len);
 	ret = write(ctx->tun_fds[0], pkt->__raw, pkt->len);
 	if (ret < 0) {
 		ret = errno;
@@ -818,6 +817,52 @@ static int server_handle_udp_packet(struct server_ctx *ctx)
 	return server_handle_client_packet(ctx);
 }
 
+static struct client_slot *server_find_active_client(struct server_ctx *ctx)
+{
+	struct client_slot *clients = ctx->clients;
+	uint32_t i;
+
+	for (i = 0; i < ctx->nr_clients; i++) {
+		if (!clients[i].is_used)
+			continue;
+
+		return &clients[i];
+	}
+
+	return NULL;
+}
+
+static int server_handle_tun_packet(struct server_ctx *ctx, int fd)
+{
+	struct pkt *pkt = &ctx->spkt;
+	struct client_slot *client;
+	ssize_t ret;
+
+	ret = read(fd, pkt->__raw, sizeof(pkt->__raw));
+	if (ret < 0) {
+		ret = errno;
+		if (ret == EAGAIN)
+			return 0;
+
+		perror("read()");
+		return -ret;
+	}
+
+	client = server_find_active_client(ctx);
+	if (!client)
+		return 0;
+
+	pkt->type = SR_PKT_TUN_DATA;
+	pkt->pad = 0;
+	pkt->len = htons((uint16_t)ret);
+
+	ret = queue_sendto(&ctx->sql, pkt, PKT_HDR_LEN + ret, &client->addr);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
 static int server_handle_events(struct server_ctx *ctx, int nr_events)
 {
 	uint32_t nr = (uint32_t)nr_events;
@@ -839,11 +884,9 @@ static int server_handle_events(struct server_ctx *ctx, int nr_events)
 		if (!(ctx->pfds[i + 1].revents & POLLIN))
 			continue;
 
-		ssize_t ret;
-		char buf[4096];
-
-		ret = read(ctx->tun_fds[i], buf, sizeof(buf));
-		printf("ret from tun %d = %zd\n", ctx->tun_fds[i], ret);
+		ret = server_handle_tun_packet(ctx, ctx->pfds[i + 1].fd);
+		if (ret < 0)
+			return ret;
 	}
 
 	return ret;
