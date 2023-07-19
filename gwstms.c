@@ -1220,6 +1220,7 @@ static int client_handle_server_tun_data(struct client_worker *wrk)
 		return 0;
 	}
 
+	printf("Received a TUN packet from server: %u bytes\n", len);
 	ret = write(wrk->tun_fd, wrk->spkt.__raw, len);
 	if (ret < 0) {
 		ret = errno;
@@ -1306,8 +1307,6 @@ static int client_handle_tun_packet(struct client_worker *wrk)
 		perror("read()");
 		return -ret;
 	}
-
-	printf("Read %zd bytes from TUN device\n", ret);
 
 	len = (uint32_t)ret;
 	wrk->cpkt.type = CL_PKT_TUN_DATA;
