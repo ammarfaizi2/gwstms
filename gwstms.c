@@ -662,14 +662,24 @@ static int server_handle_client_pkt_handshake(struct server_ctx *ctx)
 	struct client_slot *client;
 	int ret;
 
-	if (ctx->cpkt_len != offsetoff(struct pkt, handshake))
+	if (ctx->cpkt_len != PKT_HDR_LEN + sizeof(*hs)) {
+		printf("Invalid handshake packet length: %u from %s\n",
+		       ctx->cpkt_len, addr_to_str_pt(&ctx->addr));
 		return 0;
+	}
 
-	if (memcmp(hs->magic, HS_MAGIC, sizeof(hs->magic)) != 0)
+	if (memcmp(hs->magic, HS_MAGIC, sizeof(hs->magic)) != 0) {
+		printf("Invalid handshake magic (%u, %u, %u, %u) from %s\n",
+		       hs->magic[0], hs->magic[1], hs->magic[2], hs->magic[3],
+		       addr_to_str_pt(&ctx->addr));
 		return 0;
+	}
 
-	if (ctx->cur_client)
+	if (ctx->cur_client) {
+		printf("Client %s sent a duplicate handshake packet\n",
+		       addr_to_str_pt(&ctx->addr));
 		return 0;
+	}
 
 	client = server_get_client_slot(ctx);
 	if (!client) {
