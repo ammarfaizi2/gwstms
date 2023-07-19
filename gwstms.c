@@ -801,6 +801,12 @@ static int server_handle_events(struct server_ctx *ctx, int nr_events)
 
 		if (!(ctx->pfds[i + 1].revents & POLLIN))
 			continue;
+
+		ssize_t ret;
+		char buf[4096];
+
+		ret = read(ctx->tun_fds[i], buf, sizeof(buf));
+		printf("ret from tun %d = %zd\n", ctx->tun_fds[i], ret);
 	}
 
 	return ret;
