@@ -367,11 +367,11 @@ static int create_udp_sock_and_bind(int family, struct sockaddr_storage *ss)
 	tmp = 1;
 	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &tmp, sizeof(tmp));
 
-	tmp = 1024 * 1024 * 128;
-	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &tmp, sizeof(tmp));
+	tmp = 1024 * 1024 * 256;
+	setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &tmp, sizeof(tmp));
 
-	tmp = 1024 * 1024 * 128;
-	setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &tmp, sizeof(tmp));
+	tmp = 1024 * 1024 * 256;
+	setsockopt(fd, SOL_SOCKET, SO_SNDBUFFORCE, &tmp, sizeof(tmp));
 
 	err = bind(fd, (struct sockaddr *)ss, get_sockaddr_len(ss));
 	if (err < 0) {
