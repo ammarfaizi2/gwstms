@@ -114,6 +114,7 @@ struct client_ctx {
 	struct sockaddr_storage	dst_addr;
 	struct client_worker	*workers;
 	uint32_t		nr_workers;
+	uint32_t		iter;
 
 	const char		*server_addr;
 	uint16_t		server_port;
@@ -623,7 +624,6 @@ static ssize_t __queue_sendto(struct send_queue_list *sql, struct pkt *pkt,
 	struct send_queue *tail = sql->sq_tail;
 	struct send_queue *sq;
 
-	printf("Queueing %u bytes packet to %s\n", len, addr_to_str_pt(ss));
 	sq = malloc(sizeof(*sq));
 	if (!sq) {
 		printf("Cannot allocate memory for send queue\n");
@@ -656,6 +656,27 @@ static int queue_sendto(struct send_queue_list *sql, struct pkt *pkt,
 	socklen_t ss_len = get_sockaddr_len(ss);
 	int fd = sql->udp_pfd->fd;
 	ssize_t ret;
+
+	if (sql->sq_head) {
+		int err;
+
+		/*
+		 * If the sendto queue is not empty, we must flush it first
+		 * before sending the new packet.
+		 */
+		err = flush_sendto_queue(sql);
+		if (err < 0)
+			return err;
+
+		if (sql->sq_head) {
+			/*
+			 * We've tried to flush the sendto queue, but
+			 * it is still not empty. So, we must queue the
+			 * new packet for sending later.
+			 */
+			return (int)__queue_sendto(sql, pkt, len, ss);
+		}
+	}
 
 	ret = sendto(fd, pkt, len, MSG_DONTWAIT, (struct sockaddr *)ss, ss_len);
 	if (ret < 0) {
