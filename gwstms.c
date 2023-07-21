@@ -266,6 +266,13 @@ static int tun_alloc(const char *dev, short flags)
 		return -err;
 	}
 
+	if (ioctl(fd, TUNSETPERSIST, 1) < 0) {
+		err = errno;
+		close(fd);
+		printf("ioctl(%d, TUNSETPERSIST, &ifr): %s\n", fd, strerror(err));
+		return -err;
+	}
+
 	return fd;
 }
 
