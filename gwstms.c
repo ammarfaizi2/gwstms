@@ -449,7 +449,7 @@ static int server_bring_up_iface(struct server_ctx *ctx)
 
 	ret |= pr_exec("ip link set dev %s up", SERVER_TUN_NAME);
 	ret |= pr_exec("ip link set dev %s mtu 1420", SERVER_TUN_NAME);
-	ret |= pr_exec("ip addr add %s/%d dev %s", GWC_IP_GATEWAY, GWC_SUBNET_CIDR, SERVER_TUN_NAME);
+	ret |= pr_exec("ip addr replace %s/%d dev %s", GWC_IP_GATEWAY, GWC_SUBNET_CIDR, SERVER_TUN_NAME);
 
 	(void)ctx;
 	return ret;
@@ -1226,7 +1226,7 @@ static int client_bring_up_iface(struct client_ctx *ctx)
 
 	ret |= pr_exec("ip link set dev %s up", CLIENT_TUN_NAME);
 	ret |= pr_exec("ip link set dev %s mtu 1420", CLIENT_TUN_NAME);
-	ret |= pr_exec("ip addr add %s/%d dev %s", GWC_IP_CLIENT, GWC_SUBNET_CIDR, CLIENT_TUN_NAME);
+	ret |= pr_exec("ip addr replace %s/%d dev %s", GWC_IP_CLIENT, GWC_SUBNET_CIDR, CLIENT_TUN_NAME);
 
 	(void)ctx;
 	return ret;
