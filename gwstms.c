@@ -1130,6 +1130,7 @@ static int client_interpret_env_it(struct client_ctx *ctx, uint32_t i)
 {
 	struct client_worker *workers;
 	const char *tmp, *iface, *ip;
+	uint32_t idx;
 
 	tmp = getenv_fmt("GWC_BIND_IFACE_%03u", i);
 	if (!tmp)
@@ -1143,16 +1144,16 @@ static int client_interpret_env_it(struct client_ctx *ctx, uint32_t i)
 
 	ip = tmp;
 
-	workers = realloc(ctx->workers, (i + 1) * sizeof(*workers));
+	idx = ctx->nr_workers++;
+	workers = realloc(ctx->workers, ctx->nr_workers * sizeof(*workers));
 	if (!workers) {
 		printf("Cannot allocate memory for workers (i = %u)\n", i);
 		return -ENOMEM;
 	}
 
-	memset(&workers[i], 0, sizeof(*workers));
+	memset(&workers[idx], 0, sizeof(*workers));
 	ctx->workers = workers;
-	ctx->nr_workers = i + 1;
-	return client_init_worker(ctx, i, iface, ip);
+	return client_init_worker(ctx, idx, iface, ip);
 }
 
 static int client_interpret_env(struct client_ctx *ctx)
@@ -1187,7 +1188,7 @@ static int client_interpret_env(struct client_ctx *ctx)
 	for (i = 0; i < CLIENT_NR_MAX_SOCKS; i++) {
 		ret = client_interpret_env_it(ctx, i);
 		if (ret == -9999)
-			break;
+			continue;
 
 		nr++;
 		if (ret < 0)
